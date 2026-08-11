@@ -82,12 +82,44 @@ el proceso.
 ### Paso 2 — Construir el entorno de rescate
 
 Requiere **Windows ADK + complemento Windows PE** y una consola **como
-administrador**. Instalar el ADK primero y el complemento después: el
-instalador del complemento espera encontrar el ADK y falla si no está.
+administrador**.
+
+| | Enlace |
+|---|---|
+| 1º Windows ADK | https://go.microsoft.com/fwlink/?linkid=2289980 |
+| 2º Complemento Windows PE | https://go.microsoft.com/fwlink/?linkid=2289981 |
+
+**El orden importa**: el instalador del complemento espera encontrar el ADK
+y falla si no está. Al instalar el ADK basta con marcar **Deployment
+Tools**; lo demás no hace falta y ocupa varios GB.
+
+> ⚠️ **Aplica el parche [KB5079391](https://learn.microsoft.com/en-us/windows-hardware/get-started/adk-servicing)**
+> o posterior. Corrige CVE-2026-25166, una vulnerabilidad en la propia
+> herramienta de Microsoft.
 
 ```bash
 .\build\winpe.ps1 -Arch amd64 -Iso
 ```
+
+#### Sobre los 32 bits
+
+**El ADK moderno ya no incluye WinPE de 32 bits.** Microsoft lo retiró a
+partir del ADK para Windows 11 22H2.
+
+Antes de buscar una solución, comprueba si de verdad hace falta: **WinPE
+amd64 arranca en cualquier procesador de 64 bits, sin importar que el
+Windows instalado sea de 32**. Y prácticamente todo equipo de 2006 en
+adelante lleva procesador de 64 bits, aunque le hayan puesto un Windows 7
+de 32.
+
+Solo los procesadores de 32 bits reales —Pentium 4, Atom antiguos— exigen
+WinPE x86. Para esos hace falta el complemento del
+[ADK para Windows 10 2004](https://go.microsoft.com/fwlink/?linkid=2120253),
+que es la última versión que lo incluye.
+
+> Esto **no afecta** al ejecutable x86 de InyaguiDiag: ese sigue haciendo
+> falta para el modo online sobre un Windows de 32 bits, y se compila
+> igual.
 
 ### Paso 3 — Preparar el pendrive con Ventoy
 

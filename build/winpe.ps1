@@ -81,6 +81,26 @@ Ok "ADK con complemento WinPE"
 $copype = Join-Path $adk "Deployment Tools\DandISetUpEnv.bat"
 if (-not (Test-Path $copype)) { Die "Faltan las Deployment Tools del ADK" }
 
+# El ADK moderno ya no trae WinPE de 32 bits. Microsoft lo retiro a partir
+# del ADK para Windows 11 22H2. Comprobarlo aqui evita que el script muera
+# a mitad del proceso con un error de copype que no explica nada.
+if ($Arch -eq "x86" -and -not (Test-Path (Join-Path $peRoot "x86"))) {
+    Die @"
+Este ADK no incluye WinPE de 32 bits.
+
+Microsoft lo retiro desde el ADK para Windows 11 22H2. La ultima version
+con WinPE x86 es el complemento del ADK para Windows 10 2004:
+  https://go.microsoft.com/fwlink/?linkid=2120253
+
+ANTES DE INSTALARLO, comprueba si de verdad hace falta. WinPE amd64
+arranca en CUALQUIER procesador de 64 bits, sin importar que el Windows
+instalado sea de 32. Solo los equipos con procesador de 32 bits reales
+--Pentium 4, Atom antiguos-- necesitan WinPE x86.
+
+Para el resto, usa:  .\build\winpe.ps1 -Arch amd64
+"@
+}
+
 # El .exe de InyaguiDiag debe existir: WinPE sin la herramienta no sirve
 $exe = Join-Path $root "dist\$(if ($Arch -eq 'amd64') {'x64'} else {'x86'})\InyaguiDiag.exe"
 if (-not (Test-Path $exe)) {
