@@ -1,0 +1,41 @@
+# Dependencias de ejecucion de InyaguiDiag (entorno de DESARROLLO).
+#
+# El proyecto tiene DOS entornos distintos y no se deben mezclar:
+#
+#   desarrollo : Python moderno (3.11+). Este archivo. Versiones al dia.
+#   build      : Python 3.8, unico compatible con Windows 7.
+#                Ver constraints-py38.txt
+#
+# Si fijas una version aca, verifica que exista tambien para 3.8 o que
+# constraints-py38.txt la ancle a una que si.
+
+# Backend COM para WMI. Sin el, el puente cae a PowerShell y cada consulta
+# cuesta ~0.9 s en vez de ~0.02 s (medido: escaneo completo 10.0s -> 0.4s).
+pywin32>=306 ; sys_platform == "win32"
+
+# Metricas del sistema en vivo (CPU, memoria, procesos, red).
+psutil>=5.9
+
+# Parseo de registros de eventos .evtx. Python puro, sin dependencias de
+# Windows: funciona igual sobre un disco montado que no arranca, que es
+# exactamente lo que necesita el modo OFFLINE.
+#
+# El limite inferior es 0.7.4 y NO se puede subir: es la ultima version
+# publicada para Python 3.8. En desarrollo se instala 0.8.x; el entorno de
+# build queda anclado a 0.7.4 por constraints-py38.txt. La API que usamos
+# (Evtx(...).records() y record.xml()) es identica en ambas.
+python-evtx>=0.7.4
+
+# Lectura de hives del registro (SYSTEM, SOFTWARE) SIN Windows arrancado.
+# Mismo autor que python-evtx y misma virtud: Python puro, asi que parsea
+# un hive copiado de cualquier equipo. Es lo unico que permite saber que
+# version de Windows y que nombre de equipo tiene un disco que no bootea.
+#
+# VERIFICADO en el entorno 3.8 del proyecto: 1.3.1 instala sin compilar
+# nada (arrastra enum-compat y unicodecsv, ambos puros). Ver el anclaje en
+# constraints-py38.txt.
+#
+# Es una dependencia OPCIONAL en la practica: si falta, el colector
+# offline degrada a deducir la build del arbol de archivos y lo anota como
+# cobertura incompleta. El escaneo no se cae.
+python-registry>=1.3.1

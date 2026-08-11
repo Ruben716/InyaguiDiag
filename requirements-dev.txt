@@ -1,0 +1,7 @@
+-r requirements.txt
+
+# Pruebas
+pytest>=7.0,<8.0
+
+# Empaquetado a ejecutable portable (x86 y x64)
+pyinstaller>=5.13,<6.0

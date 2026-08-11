@@ -1,0 +1,51 @@
+# Anclaje de versiones para el entorno de BUILD con Python 3.8.
+#
+# POR QUE EXISTE ESTE ARCHIVO
+# ---------------------------
+# Python 3.8 es la ultima version con soporte oficial de Windows 7, que es
+# el piso de compatibilidad del proyecto. Pero 3.8 lleva fuera de soporte
+# desde octubre de 2024, asi que la mayoria de paquetes ya publican ruedas
+# que no instalan en el.
+#
+# Sin este archivo, `pip install -r requirements.txt` en el entorno 3.8
+# resuelve versiones nuevas, falla al construir, o -- peor -- instala algo
+# que importa bien en la maquina de desarrollo y revienta en un Windows 7
+# real donde nadie lo va a depurar.
+#
+# USO
+#   py -3.8 -m pip install -r requirements.txt -c constraints-py38.txt
+#
+# ESTADO: las versiones de abajo son el punto de partida esperado. Hay que
+# CONFIRMARLAS instalando de verdad en el entorno 3.8; hasta entonces la
+# compatibilidad con Windows 7 esta disenada, no probada.
+
+# Ultima serie de pywin32 que publica ruedas para cp38.
+pywin32==306
+
+# psutil 6.x en adelante endurecio los requisitos de version de Python.
+# La serie 5.9 es la ultima con soporte amplio de 3.8.
+psutil==5.9.8
+
+# ULTIMA version publicada para Python 3.8. Verificado contra PyPI: la
+# serie 0.8.x exige 3.9+, asi que este anclaje no es una preferencia sino
+# un techo duro. Si algun dia se sube, el build deja de arrancar en Win7.
+#
+# AVISO SOBRE UN CONFLICTO QUE PIP REPORTA: python-evtx 0.7.4 declara
+# `zipp==1.0.0`, un pin exacto que choca con el zipp 3.x que arrastra
+# PyInstaller. VERIFICADO a mano: el conflicto es espurio -- python-evtx
+# importa y parsea .evtx sin problema con zipp 3.20.2. Se deja ganar a la
+# version nueva y se ignora el aviso de pip.
+python-evtx==0.7.4
+
+# CONFIRMADO instalando de verdad en .toolchain\py38-x64:
+#   python.exe -m pip install python-registry  ->  1.3.1, sin errores.
+# Es Python puro y sus dos dependencias (enum-compat 0.0.3, unicodecsv
+# 0.14.1) tambien, asi que no hace falta compilador ni ruedas por
+# arquitectura. Se ancla la version exacta probada y no un rango: el
+# entorno 3.8 ya no recibe correcciones y una version futura que exija
+# 3.9+ dejaria el modo offline sin lectura del registro justo en los
+# Windows 7, que es donde mas cuesta diagnosticar.
+python-registry==1.3.1
+
+# Ultima serie de PyInstaller que soporta Python 3.8.
+pyinstaller==5.13.2

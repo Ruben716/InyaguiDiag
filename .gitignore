@@ -1,0 +1,26 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+env38/
+
+# Salida de PyInstaller
+build/*/
+dist/
+*.manifest
+
+# Toolchain de build (Python 3.8 extraido). Se regenera con los paquetes
+# nuget de la PSF; ver docs/AUDITORIA-DEPENDENCIAS.md
+.toolchain/
+
+# Binarios de terceros: se descargan aparte, no se versionan
+tools/x64/*
+tools/x86/*
+!tools/x64/.gitkeep
+!tools/x86/.gitkeep
+
+# Reportes generados durante pruebas
+Reportes/
+*.log
