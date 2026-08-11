@@ -27,7 +27,14 @@
 param(
     [string]$Usb = "",
     [ValidateSet("x64", "x86")]
-    [string]$Arch = "x64"
+    [string]$Arch = "x64",
+
+    # Firma el ejecutable con un certificado local. Para el camino
+    # habitual --SignPath Foundation-- NO se usa esto: alli firma el CI.
+    # Ver docs/FIRMA.md.
+    [switch]$Sign,
+    [string]$CertThumbprint = "",
+    [string]$TimestampUrl = "http://timestamp.digicert.com"
 )
 
 $ErrorActionPreference = "Stop"
@@ -108,6 +115,38 @@ declara sano cualquier equipo.
 Ok "$collectors colectores y $rules reglas presentes en el binario"
 
 & $exe --version | ForEach-Object { Ok $_ }
+
+# ---------------------------------------------------------------------
+if ($Sign) {
+    Step "Firmando"
+
+    if (-not $CertThumbprint) {
+        Die "Con -Sign hay que indicar -CertThumbprint. Ver docs\FIRMA.md"
+    }
+
+    $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" `
+        -Filter "signtool.exe" -Recurse -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -match "\\x64\\" } |
+        Sort-Object FullName -Descending | Select-Object -First 1
+
+    if (-not $signtool) {
+        Die "No se encontro signtool.exe. Viene con el Windows SDK."
+    }
+
+    # El sellado de tiempo NO es opcional: sin el, la firma deja de ser
+    # valida el dia que caduque el certificado, y los binarios que ya
+    # entregaste a clientes empiezan a dar error de firma invalida.
+    & $signtool.FullName sign /fd SHA256 /sha1 $CertThumbprint `
+        /tr $TimestampUrl /td SHA256 $exe
+    if ($LASTEXITCODE -ne 0) { Die "La firma fallo" }
+
+    $sig = Get-AuthenticodeSignature $exe
+    if ($sig.Status -ne "Valid") { Die "Firma invalida: $($sig.Status)" }
+    Ok "firmado por $($sig.SignerCertificate.Subject -replace '^CN=([^,]+).*','$1')"
+} else {
+    Write-Host "`n  [!] Sin firmar. Smart App Control lo bloqueara en Windows 11" -ForegroundColor Yellow
+    Write-Host "      con instalacion limpia. Ver docs\FIRMA.md" -ForegroundColor Yellow
+}
 
 # ---------------------------------------------------------------------
 if (-not $Usb) {

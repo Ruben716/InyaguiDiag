@@ -184,8 +184,9 @@ Guía completa en [`docs/USB.md`](docs/USB.md).
 > ⚠️ **Windows 11 con Smart App Control bloquea el ejecutable sin firmar.**
 > Comprobado, no es teoría. Afecta solo al modo online sobre instalaciones
 > limpias de Win11; Windows 7/8/10 y el arranque WinPE del USB funcionan
-> igual. La solución es firmar el binario — ver la sección 7 de
-> [`docs/USB.md`](docs/USB.md).
+> igual. Mientras tanto, en la máquina de desarrollo usa
+> `python -m inyaguidiag`: `python.exe` sí está firmado.
+> Procedimiento completo en [`docs/FIRMA.md`](docs/FIRMA.md).
 
 ## Flujo en un equipo que no arranca
 
@@ -205,6 +206,19 @@ reglas son específicas de este escenario:
 | `BOT-003` | Actualización de Windows a medio aplicar |
 | `BOT-004` | Disco lleno impidiendo el arranque |
 
+## Licencia
+
+MIT — ver [`LICENSE`](LICENSE).
+
+`smartctl` (GPL v2) **no** se incluye en este repositorio y se invoca como
+proceso separado, así que su copyleft no alcanza a este código. Los
+detalles y las obligaciones al distribuir un USB que sí lo incluya están en
+[`TERCEROS.md`](TERCEROS.md).
+
 ## Documentación
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — decisiones de diseño y por qué
+- [`docs/USB.md`](docs/USB.md) — armar el pendrive y usarlo en campo
+- [`docs/FIRMA.md`](docs/FIRMA.md) — firma de código y Smart App Control
+- [`docs/AUDITORIA-DEPENDENCIAS.md`](docs/AUDITORIA-DEPENDENCIAS.md) — verificación de los binarios de terceros
+- [`TERCEROS.md`](TERCEROS.md) — licencias del software ajeno
