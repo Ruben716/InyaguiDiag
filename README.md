@@ -206,6 +206,39 @@ reglas son específicas de este escenario:
 | `BOT-003` | Actualización de Windows a medio aplicar |
 | `BOT-004` | Disco lleno impidiendo el arranque |
 
+## Descargas y firma de código
+
+Las versiones se publican en
+[Releases](https://github.com/Ruben716/InyaguiDiag/releases).
+
+Los binarios se firman con un certificado de firma de código **gratuito
+proporcionado por [SignPath Foundation](https://signpath.org/)**, emitido
+por [SignPath.io](https://signpath.io/).
+
+> **Estado actual:** la solicitud a SignPath Foundation está en trámite.
+> Las versiones publicadas antes de la aprobación **no están firmadas**, y
+> Windows 11 con Smart App Control las bloqueará. Mientras tanto se puede
+> ejecutar desde el código fuente con `python -m inyaguidiag`, o desde el
+> arranque WinPE del USB, que no está sujeto a esa restricción.
+
+Cómo se decide qué se firma y quién lo aprueba:
+[`docs/CODE-SIGNING-POLICY.md`](docs/CODE-SIGNING-POLICY.md).
+
+## Privacidad
+
+InyaguiDiag **no envía nada a ninguna parte**: no tiene telemetría ni
+analíticas, y el proyecto no opera ningún servidor. Todo lo que lee se
+queda en el equipo o en el USB.
+
+Los reportes que genera **sí contienen datos identificables** del equipo
+analizado —nombre, modelo, número de serie— así que conviene tenerlo en
+cuenta antes de compartirlos. El programa nunca los transmite por su
+cuenta.
+
+Detalle completo, incluidas las únicas tres conexiones de red que hace el
+diagnóstico y para qué sirven, en
+[`docs/CODE-SIGNING-POLICY.md`](docs/CODE-SIGNING-POLICY.md#qué-hace-el-programa-con-los-datos).
+
 ## Licencia
 
 MIT — ver [`LICENSE`](LICENSE).
