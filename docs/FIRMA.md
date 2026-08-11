@@ -49,47 +49,102 @@ Authenticode dice *SignPath Foundation*.
 
 ### Requisitos y estado
 
+Verificados contra las condiciones publicadas en
+[signpath.org/terms.html](https://signpath.org/terms.html).
+
 | Requisito | Estado |
 |---|---|
-| Licencia aprobada por la OSI | ✅ MIT (`LICENSE`) |
+| Licencia aprobada por la OSI, sin doble licencia comercial | ✅ MIT |
 | Repositorio público | ✅ github.com/Ruben716/InyaguiDiag |
-| Compilación en un servicio de CI | ✅ `.github/workflows/build.yml` |
-| El binario debe salir del CI, no de una máquina local | ✅ |
-| Proyecto con utilidad demostrable | ⬜ lo evalúan ellos |
+| Sin componentes propietarios | ✅ todas las dependencias son OSS |
+| Sin malware ni programas no deseados | ✅ |
+| **Sin herramientas de hacking** | ✅ diagnostica, no busca ni explota vulnerabilidades |
+| Funcionalidad documentada en la página de descarga | ✅ `README.md` |
+| Compilación automatizada y verificable desde el código | ✅ GitHub Actions |
+| Aprobación **manual** de cada versión antes de firmar | ✅ solo corre en etiquetas |
+| **Política de firma publicada** | ✅ [`CODE-SIGNING-POLICY.md`](CODE-SIGNING-POLICY.md) |
+| Roles declarados: Autor, Revisor, Aprobador | ✅ en esa política |
+| Verificación en dos pasos en todas las cuentas con acceso | ⬜ **compruébalo en tu cuenta** |
+| Proyecto **ya publicado** en la forma que se va a firmar | ⬜ **falta crear el Release** |
+| Proyecto mantenido activamente | ⬜ lo evalúan ellos |
 
-> **El requisito que sorprende:** SignPath **no firma binarios compilados
-> en tu PC**. Solo firma artefactos producidos por el CI, porque lo que su
-> firma garantiza es que el binario salió del código público que cualquiera
-> puede auditar. Por eso el flujo de GitHub Actions no es opcional.
+> **Dos requisitos que suelen sorprender:**
+>
+> 1. **SignPath no firma binarios compilados en tu PC.** Solo firma
+>    artefactos del CI, porque lo que su firma garantiza es que el binario
+>    salió del código público auditable.
+> 2. **El proyecto tiene que estar ya publicado** antes de solicitar. No se
+>    puede pedir la firma para algo que todavía no se distribuye: hay que
+>    tener un Release en GitHub con los binarios (sin firmar, da igual).
 
 ### Pasos
 
-1. **Verificar que el CI compila.** Hacer un push y comprobar que el flujo
-   `build` termina en verde y publica el artefacto `inyaguidiag-binaries`.
-   Si el paso "Verificar el binario compilado" falla, arreglarlo antes de
-   solicitar nada.
+**1. Activar la verificación en dos pasos** en GitHub, si no la tienes:
+`Settings → Password and authentication → Two-factor authentication`.
+Es un requisito y lo van a comprobar.
 
-2. **Solicitar en** https://signpath.org/apply
-   Datos que piden: URL del repositorio, licencia, descripción del
-   proyecto, y para qué sirve el binario firmado.
+**2. Verificar que el CI pasa en verde.** Entrar a la pestaña *Actions* del
+repositorio. Si el paso *"Verificar el binario compilado"* falla, hay que
+arreglarlo antes de solicitar nada: sin binarios no hay qué firmar.
 
-3. **Al aprobar**, entregan `organization-id`, `project-slug` y
-   `signing-policy-slug`, más un token de API.
+**3. Publicar la primera versión.**
 
-4. **Guardar el token** como secreto del repositorio, con el nombre
-   `SIGNPATH_API_TOKEN`:
-   `Settings → Secrets and variables → Actions → New repository secret`
-   Nunca dentro de un archivo del repositorio.
+```bash
+git tag v0.1.0 -m "Primera version publica"
+git push origin v0.1.0
+```
 
-5. **Descomentar el paso de firma** en `.github/workflows/build.yml` (está
-   escrito y marcado como pendiente) y pegar los identificadores.
+Después, en GitHub: `Releases → Draft a new release`, elegir la etiqueta
+`v0.1.0`, describir qué es, y **adjuntar los dos ejecutables** que produjo
+el CI (se descargan de los artefactos del flujo). Sin firmar, no importa —
+lo que hace falta es que exista una descarga pública.
 
-6. **Publicar una versión** con una etiqueta:
-   ```bash
-   git tag v0.1.0 && git push origin v0.1.0
-   ```
-   El trabajo de firma solo corre en etiquetas: SignPath tiene cuota y no
-   tiene sentido gastar una firma por cada commit.
+**4. Solicitar en** https://signpath.org/apply
+
+El formulario pide:
+
+| Campo | Qué poner |
+|---|---|
+| **Repository URL** | `https://github.com/Ruben716/InyaguiDiag` |
+| **License** | `MIT` |
+| **Download / Release URL** | La URL del Release del paso 3 |
+| **Project description** | Qué hace, quién lo usa y qué tipo de archivo se firma (`.exe`) |
+
+Escríbelo **en inglés**: quien lo revisa no necesariamente lee castellano.
+Un texto que sirve:
+
+> InyaguiDiag is a portable diagnostic tool for Windows computers
+> (Windows 7 through 11). It runs from a USB drive without installing
+> anything on the machine being examined, and can also analyse a disk from
+> a computer that no longer boots, by reading its event logs, crash dumps
+> and registry hives offline from a WinPE rescue environment.
+>
+> It is aimed at technicians who repair computers for other people, and at
+> users who want to understand a failing machine. Every problem it detects
+> is reported together with a plain-language explanation and concrete
+> repair steps.
+>
+> The artifacts to be signed are two console executables, `InyaguiDiag.exe`
+> for x64 and x86, built with PyInstaller by GitHub Actions from the public
+> source.
+
+**5. Esperar.** Suele tardar de unos días a unas semanas. Pueden hacer
+preguntas de seguimiento: respóndelas, no es mala señal.
+
+**6. Al aprobar**, entregan `organization-id`, `project-slug` y
+`signing-policy-slug`, más un token de API.
+
+**7. Guardar el token** como secreto del repositorio:
+`Settings → Secrets and variables → Actions → New repository secret`,
+con el nombre `SIGNPATH_API_TOKEN`.
+**Nunca dentro de un archivo del repositorio** — un token en el código es
+un token filtrado.
+
+**8. Descomentar el paso de firma** en `.github/workflows/build.yml`, que
+ya está escrito y marcado, y pegar los identificadores.
+
+**9. Publicar la siguiente versión** con una etiqueta nueva. Ahora sí sale
+firmada.
 
 ### Después de la primera firma
 

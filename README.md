@@ -220,5 +220,7 @@ detalles y las obligaciones al distribuir un USB que sí lo incluya están en
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — decisiones de diseño y por qué
 - [`docs/USB.md`](docs/USB.md) — armar el pendrive y usarlo en campo
 - [`docs/FIRMA.md`](docs/FIRMA.md) — firma de código y Smart App Control
+- [`docs/CODE-SIGNING-POLICY.md`](docs/CODE-SIGNING-POLICY.md) — quién firma, qué datos lee el programa
+- [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) — código de conducta
 - [`docs/AUDITORIA-DEPENDENCIAS.md`](docs/AUDITORIA-DEPENDENCIAS.md) — verificación de los binarios de terceros
 - [`TERCEROS.md`](TERCEROS.md) — licencias del software ajeno
