@@ -1,224 +1,208 @@
 <#
 .SYNOPSIS
-    Construye una imagen WinPE minima con InyaguiDiag incorporado.
+    Construye una ISO arrancable de WinPE para el rescate de equipos.
 
 .DESCRIPTION
-    Este es el entorno de rescate: se arranca desde el USB en un equipo que
-    NO bootea, se monta su disco y se analiza en modo OFFLINE.
+    Este es el entorno que se arranca en un equipo que NO bootea, para
+    analizar su disco en modo OFFLINE.
 
-    POR QUE UN WinPE PROPIO Y NO UNA SUITE DE TERCEROS
-    --------------------------------------------------
-    Hiren's BootCD PE pesa poco mas de 3 GB porque trae mas de cien
-    herramientas. Un WinPE minimo ronda los 400-600 MB, y le agregamos
-    solo lo nuestro. La diferencia decide si el USB de 4 GB alcanza.
+    FUNCIONA SIN PRIVILEGIOS DE ADMINISTRADOR
+    -----------------------------------------
+    La via documentada por Microsoft (copype + MakeWinPEMedia) exige
+    elevacion porque monta la imagen con DISM. Este script evita ese paso.
 
-    POR QUE WinPE Y NO UN LINUX LIVE
-    --------------------------------
-    WinPE lee NTFS de forma nativa y corre el MISMO ejecutable que el modo
-    online, sin recompilar. Con Linux habria que mantener dos binarios y
-    pelear con permisos y drivers.
+    El truco: `copype` falla al montar, pero ANTES de fallar ya copio la
+    carpeta `media` completa con su `boot.wim` intacto. Ese boot.wim es el
+    winpe.wim original del ADK, que arranca perfectamente. Solo falta
+    empaquetarlo, y `oscdimg` --la herramienta que hay debajo de
+    MakeWinPEMedia-- no necesita permisos especiales.
 
-.NOTES
-    REQUISITOS QUE ESTE SCRIPT NO PUEDE RESOLVER SOLO:
+    Lo unico que se pierde sin montar es poder meter archivos DENTRO de la
+    imagen. No hace falta: InyaguiDiag vive en la particion de datos del
+    USB, y WinPE le asigna letra al arrancar.
 
-      1. Windows ADK + complemento "Windows PE". Descarga de Microsoft.
-         Instalar el ADK PRIMERO y el complemento WinPE DESPUES: el
-         instalador del complemento espera encontrar el ADK y falla si no.
-      2. Privilegios de ADMINISTRADOR. DISM monta y modifica una imagen
-         del sistema; no hay forma de hacerlo como usuario normal.
+    POR QUE NO HACE FALTA EL COMPONENTE WinPE-WMI
+    ---------------------------------------------
+    Ningun colector del modo OFFLINE usa WMI. `discovery.py` enumera las
+    unidades con llamadas directas a kernel32 (GetLogicalDrives,
+    GetDriveTypeW, GetVolumeInformation), y el resto solo lee archivos:
+    .evtx, minidumps y hives del registro. Un WinPE limpio alcanza.
 
 .PARAMETER Arch
-    amd64 (por defecto) o x86. Para equipos viejos de 32 bits hace falta x86.
+    amd64 (por defecto) o arm64.
+
+    NO existe x86: Microsoft retiro WinPE de 32 bits a partir del ADK para
+    Windows 11 22H2. Casi nunca importa -- WinPE amd64 arranca en cualquier
+    procesador de 64 bits aunque el Windows instalado sea de 32.
 
 .PARAMETER Output
-    Carpeta de trabajo. Necesita ~2 GB libres durante el proceso.
-
-.PARAMETER Iso
-    Si se indica, genera tambien un .iso listo para Ventoy.
+    Carpeta de trabajo. Necesita ~1 GB libre.
 
 .EXAMPLE
-    .\build\winpe.ps1 -Arch amd64 -Iso
+    .\build\winpe.ps1
+    .\build\winpe.ps1 -Arch amd64 -Output D:\temp\pe
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet("amd64", "x86")]
+    [ValidateSet("amd64", "arm64")]
     [string]$Arch = "amd64",
-    [string]$Output = "$env:TEMP\InyaguiPE",
-    [switch]$Iso
+    [string]$Output = ""
 )
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path $PSScriptRoot -Parent
+if (-not $Output) { $Output = Join-Path $root "build\pe-$Arch" }
 
 function Step($t) { Write-Host "`n=== $t ===" -ForegroundColor Cyan }
 function Ok($t)   { Write-Host "  [ok] $t"   -ForegroundColor Green }
 function Die($t)  { Write-Host "  [X] $t"    -ForegroundColor Red; exit 1 }
 
 # ---------------------------------------------------------------------
-Step "Requisitos"
-
-$id = [Security.Principal.WindowsIdentity]::GetCurrent()
-if (-not (New-Object Security.Principal.WindowsPrincipal $id).IsInRole(
-        [Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Die "Hace falta ejecutar esta consola como Administrador. DISM monta una imagen del sistema y no hay atajo."
-}
-Ok "administrador"
+Step "Comprobando el ADK"
 
 $adk = "${env:ProgramFiles(x86)}\Windows Kits\10\Assessment and Deployment Kit"
 $peRoot = Join-Path $adk "Windows Preinstallation Environment"
+
 if (-not (Test-Path $peRoot)) {
     Die @"
-No se encontro el complemento Windows PE del ADK en:
-  $peRoot
+No se encontro el complemento Windows PE del ADK.
 
-Descarga desde Microsoft e instala EN ESTE ORDEN:
-  1. Windows ADK               (marcar 'Deployment Tools')
-  2. Windows PE add-on for ADK
-"@
-}
-Ok "ADK con complemento WinPE"
-
-$copype = Join-Path $adk "Deployment Tools\DandISetUpEnv.bat"
-if (-not (Test-Path $copype)) { Die "Faltan las Deployment Tools del ADK" }
-
-# El ADK moderno ya no trae WinPE de 32 bits. Microsoft lo retiro a partir
-# del ADK para Windows 11 22H2. Comprobarlo aqui evita que el script muera
-# a mitad del proceso con un error de copype que no explica nada.
-if ($Arch -eq "x86" -and -not (Test-Path (Join-Path $peRoot "x86"))) {
-    Die @"
-Este ADK no incluye WinPE de 32 bits.
-
-Microsoft lo retiro desde el ADK para Windows 11 22H2. La ultima version
-con WinPE x86 es el complemento del ADK para Windows 10 2004:
-  https://go.microsoft.com/fwlink/?linkid=2120253
-
-ANTES DE INSTALARLO, comprueba si de verdad hace falta. WinPE amd64
-arranca en CUALQUIER procesador de 64 bits, sin importar que el Windows
-instalado sea de 32. Solo los equipos con procesador de 32 bits reales
---Pentium 4, Atom antiguos-- necesitan WinPE x86.
-
-Para el resto, usa:  .\build\winpe.ps1 -Arch amd64
+Descargar e instalar EN ESTE ORDEN:
+  1. Windows ADK  (marcar solo 'Deployment Tools')
+     https://go.microsoft.com/fwlink/?linkid=2289980
+  2. Windows PE add-on
+     https://go.microsoft.com/fwlink/?linkid=2289981
 "@
 }
 
-# El .exe de InyaguiDiag debe existir: WinPE sin la herramienta no sirve
-$exe = Join-Path $root "dist\$(if ($Arch -eq 'amd64') {'x64'} else {'x86'})\InyaguiDiag.exe"
-if (-not (Test-Path $exe)) {
-    Die "Falta $exe. Ejecuta primero:  .\build\build.ps1 -Arch $(if ($Arch -eq 'amd64') {'x64'} else {'x86'})"
+# OJO con el nombre: es DandISetEnv.bat, NO DandISetUpEnv.bat. Casi toda la
+# documentacion antigua cita el segundo, que no existe en el ADK actual.
+# copype depende de las variables que define (%WinPERoot%, %OSCDImgRoot%) y
+# sin ellas falla con un "processor architecture was not found" que no dice
+# nada util.
+$envSetup = Join-Path $adk "Deployment Tools\DandISetEnv.bat"
+if (-not (Test-Path $envSetup)) { Die "Faltan las Deployment Tools del ADK" }
+
+$srcWim = Join-Path $peRoot "$Arch\en-us\winpe.wim"
+if (-not (Test-Path $srcWim)) {
+    Die "El ADK no incluye WinPE para '$Arch'. Disponibles: " +
+        ((Get-ChildItem $peRoot -Directory).Name -join ", ")
 }
-Ok "ejecutable presente"
+Ok "ADK con WinPE $Arch"
+
+$oscdimg = Join-Path $adk "Deployment Tools\$Arch\Oscdimg\oscdimg.exe"
+if (-not (Test-Path $oscdimg)) { Die "No se encontro oscdimg.exe" }
+Ok "oscdimg"
 
 # ---------------------------------------------------------------------
-Step "Creando el entorno base"
+Step "Preparando el arbol de WinPE"
 
-if (Test-Path $Output) {
-    Write-Host "  limpiando $Output"
-    cmd /c rmdir /s /q "$Output" 2>$null
-}
+if (Test-Path $Output) { cmd /c rmdir /s /q "$Output" 2>$null }
 
-# copype prepara el arbol de trabajo de WinPE
-$copypeCmd = Join-Path $peRoot "copype.cmd"
-cmd /c "`"$copypeCmd`" $Arch `"$Output`"" | Out-Null
-if (-not (Test-Path "$Output\media\sources\boot.wim")) { Die "copype fallo" }
-Ok "arbol WinPE creado"
-
-$mount = Join-Path $Output "mount"
-$wim = Join-Path $Output "media\sources\boot.wim"
-
-# ---------------------------------------------------------------------
-Step "Montando la imagen"
-Dism /Mount-Image /ImageFile:"$wim" /Index:1 /MountDir:"$mount" | Out-Null
-if ($LASTEXITCODE -ne 0) { Die "No se pudo montar boot.wim" }
-Ok "montada en $mount"
-
-try {
-    # -----------------------------------------------------------------
-    Step "Agregando componentes"
-
-    # Solo lo imprescindible. Cada paquete suma peso, y el presupuesto de
-    # 3 GB del USB manda.
-    #   WMI        : el ejecutable consulta WMI incluso en modo offline
-    #   Scripting  : necesario para WMI
-    #   StorageWMI : clases de disco
-    $pkgPath = Join-Path $peRoot "$Arch\WinPE_OCs"
-    foreach ($pkg in @("WinPE-WMI", "WinPE-Scripting", "WinPE-StorageWMI")) {
-        $cab = Join-Path $pkgPath "$pkg.cab"
-        if (Test-Path $cab) {
-            Dism /Image:"$mount" /Add-Package /PackagePath:"$cab" | Out-Null
-            $lang = Join-Path $pkgPath "es-es\${pkg}_es-es.cab"
-            if (Test-Path $lang) {
-                Dism /Image:"$mount" /Add-Package /PackagePath:"$lang" | Out-Null
-            }
-            Ok $pkg
-        } else {
-            Write-Host "  [!] no se encontro $pkg" -ForegroundColor Yellow
-        }
-    }
-
-    # -----------------------------------------------------------------
-    Step "Incorporando InyaguiDiag"
-
-    $dest = Join-Path $mount "InyaguiDiag"
-    New-Item -ItemType Directory -Force -Path $dest, "$dest\tools\x64", "$dest\tools\x86" | Out-Null
-    Copy-Item $exe (Join-Path $dest "InyaguiDiag.exe") -Force
-    foreach ($a in @("x64", "x86")) {
-        $src = Join-Path $root "tools\$a\smartctl.exe"
-        if (Test-Path $src) { Copy-Item $src "$dest\tools\$a\" -Force }
-    }
-    Ok "herramienta incorporada"
-
-    # -----------------------------------------------------------------
-    Step "Configurando el arranque"
-
-    # startnet.cmd es lo primero que corre WinPE. wpeinit inicializa red y
-    # dispositivos; sin el no hay letras de unidad asignadas y el
-    # diagnostico offline no encontraria ningun disco.
-    @'
+# copype va a terminar en error al intentar montar la imagen (eso si pide
+# administrador), pero para entonces ya dejo copiada la carpeta media con
+# el boot.wim. Ese fallo es ESPERADO: se ignora y se comprueba el
+# resultado, que es lo que importa.
+$stage = Join-Path $env:TEMP "inyagui-copype.bat"
+@"
 @echo off
-wpeinit
-cd /d X:\InyaguiDiag
-echo.
-echo   ============================================
-echo    Inyagui Solutions - Entorno de rescate
-echo   ============================================
-echo.
-echo   Buscando instalaciones de Windows en los discos...
-echo.
-InyaguiDiag.exe --detect
-echo.
-echo   Para analizar un disco:
-echo      InyaguiDiag.exe --offline D:\Windows
-echo.
-cmd /k
-'@ | Set-Content (Join-Path $mount "Windows\System32\startnet.cmd") -Encoding ASCII
-    Ok "startnet.cmd"
+call "$envSetup"
+copype $Arch "$Output"
+"@ | Set-Content $stage -Encoding ASCII
+cmd /c "`"$stage`"" 2>&1 | Out-Null
+Remove-Item $stage -ErrorAction SilentlyContinue
 
-} finally {
-    Step "Desmontando"
-    Dism /Unmount-Image /MountDir:"$mount" /Commit | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "  [!] fallo al desmontar. Limpieza manual:" -ForegroundColor Yellow
-        Write-Host "      Dism /Cleanup-Wim" -ForegroundColor Yellow
-        exit 1
-    }
-    Ok "desmontada y guardada"
+$media = Join-Path $Output "media"
+$wim = Join-Path $media "sources\boot.wim"
+if (-not (Test-Path $wim)) {
+    Die "copype no dejo el boot.wim. Revisa que el ADK este completo."
 }
-
-$size = [math]::Round((Get-Item $wim).Length / 1MB, 0)
-Ok "boot.wim: $size MB"
+Ok ("boot.wim  {0:N0} MB" -f ((Get-Item $wim).Length / 1MB))
+Ok ("media/    {0} archivos" -f (Get-ChildItem $media -Recurse -File).Count)
 
 # ---------------------------------------------------------------------
-if ($Iso) {
-    Step "Generando ISO"
-    $isoPath = Join-Path $root "dist\InyaguiPE-$Arch.iso"
-    $makeMedia = Join-Path $peRoot "MakeWinPEMedia.cmd"
-    cmd /c "`"$makeMedia`" /ISO `"$Output`" `"$isoPath`"" | Out-Null
-    if (Test-Path $isoPath) {
-        Ok ("{0}  {1:N0} MB" -f $isoPath, ((Get-Item $isoPath).Length / 1MB))
-        Write-Host "`n  Copia esta ISO a la raiz del USB con Ventoy instalado." -ForegroundColor Cyan
-    } else {
-        Die "MakeWinPEMedia fallo"
+Step "Archivos de arranque"
+
+# copype normalmente los deja en fwfiles/, pero muere antes de llegar ahi.
+# Se toman directamente del ADK.
+$oscDir = Split-Path $oscdimg -Parent
+$fw = Join-Path $Output "fwfiles"
+New-Item -ItemType Directory -Force -Path $fw | Out-Null
+foreach ($f in @("etfsboot.com", "efisys.bin")) {
+    $src = Join-Path $oscDir $f
+    if (-not (Test-Path $src)) { Die "Falta $f en $oscDir" }
+    Copy-Item $src $fw -Force
+}
+Ok "etfsboot.com (BIOS) y efisys.bin (UEFI)"
+
+# ---------------------------------------------------------------------
+Step "Generando la ISO"
+
+$iso = Join-Path $root "dist\InyaguiPE-$Arch.iso"
+New-Item -ItemType Directory -Force -Path (Split-Path $iso -Parent) | Out-Null
+
+# -bootdata:2#... declara DOS entradas de arranque: BIOS heredado
+# (etfsboot) y UEFI (efisys). Con una sola, la ISO arranca nada mas en un
+# tipo de equipo, y el parque de maquinas que atiende esta herramienta
+# tiene de los dos.
+#
+# Se genera por .bat porque el paso de -bootdata desde PowerShell duplica
+# las comillas y oscdimg responde "Could not open boot sector file".
+$build = Join-Path $env:TEMP "inyagui-oscdimg.bat"
+@"
+@echo off
+"$oscdimg" -m -o -u2 -udfver102 -bootdata:2#p0,e,b$fw\etfsboot.com#pEF,e,b$fw\efisys.bin "$media" "$iso"
+"@ | Set-Content $build -Encoding ASCII
+cmd /c "`"$build`"" 2>&1 | Select-Object -Last 3
+Remove-Item $build -ErrorAction SilentlyContinue
+
+if (-not (Test-Path $iso)) { Die "oscdimg no genero la ISO" }
+Ok ("{0}  {1:N0} MB" -f $iso, ((Get-Item $iso).Length / 1MB))
+
+# ---------------------------------------------------------------------
+Step "Verificando"
+
+# Se monta la ISO para confirmar que tiene los dos caminos de arranque.
+# Una ISO que se genera sin error pero no arranca es peor que un fallo:
+# solo se descubre delante del equipo averiado.
+try {
+    $img = Mount-DiskImage -ImagePath $iso -PassThru -ErrorAction Stop
+    $letter = ($img | Get-Volume).DriveLetter
+    $checks = @{
+        "bootmgr"                = "arranque BIOS"
+        "EFI\Boot\bootx64.efi"   = "arranque UEFI"
+        "sources\boot.wim"       = "imagen del sistema"
+        "Boot\BCD"               = "configuracion de arranque"
     }
+    $bad = 0
+    foreach ($k in $checks.Keys) {
+        if (Test-Path "${letter}:\$k") { Ok $checks[$k] }
+        else { Write-Host "  [X] falta $k ($($checks[$k]))" -ForegroundColor Red; $bad++ }
+    }
+    Dismount-DiskImage -ImagePath $iso | Out-Null
+    if ($bad) { Die "La ISO esta incompleta" }
+} catch {
+    Write-Host "  [!] no se pudo montar para verificar: $($_.Exception.Message)" -ForegroundColor Yellow
 }
 
+# ---------------------------------------------------------------------
 Step "Listo"
+Write-Host @"
+  ISO: $iso
+
+  Siguiente paso -- preparar el USB con Ventoy:
+
+    1. Descargar Ventoy de https://www.ventoy.net/
+    2. Instalarlo en el pendrive   << ESTO BORRA EL USB ENTERO
+    3. Copiar la ISO a la raiz del USB
+    4. Desplegar la parte portable:
+         .\build\build.ps1 -Usb F: -Arch x64
+
+  En el equipo averiado: arrancar desde el USB, elegir la ISO en el menu
+  de Ventoy, y cuando cargue WinPE ejecutar la herramienta desde la
+  particion de datos del pendrive:
+
+    E:\InyaguiDiag\InyaguiDiag-x64.exe --detect
+
+  (la letra cambia en WinPE; --detect encuentra el Windows averiado solo)
+"@ -ForegroundColor Gray
