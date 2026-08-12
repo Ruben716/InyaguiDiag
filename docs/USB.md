@@ -127,10 +127,24 @@ Ventoy se instala una vez en el USB y después las ISOs se copian como
 archivos normales; al arrancar aparece un menú para elegir. Nada de volver
 a formatear cada vez que cambia una imagen.
 
-1. Descargar Ventoy de `ventoy.net`
-2. Instalarlo en el pendrive (**esto borra el USB** — hacerlo antes de
-   copiar nada)
-3. Copiar las ISOs a la raíz
+1. Descargar Ventoy de `ventoy.net` (el `.zip` de Windows) y **verificar
+   el SHA-256 contra el que publican**. Ventoy no firma sus binarios, así
+   que el hash es la única prueba de procedencia.
+2. Ejecutar `Ventoy2Disk.exe` como administrador
+3. **Comprobar dos veces la unidad en *Device*** — si eliges el disco
+   equivocado, borras el disco equivocado, y no vuelve a preguntar
+4. En *Option → Partition Style*, elegir **MBR**: arranca tanto en equipos
+   BIOS como UEFI. GPT solo sirve para UEFI.
+5. **Install** — esto borra el pendrive entero
+6. Copiar las ISOs a la raíz
+
+Ventoy deja dos particiones: una exFAT grande con letra (los datos) y una
+de 32 MB sin letra (el arranque). El ejecutable y sus herramientas van en
+la partición de datos, **no dentro de la ISO**.
+
+> Ventaja secundaria: exFAT **no tiene el límite de 4 GB por archivo** de
+> FAT32. Si algún día hay que llevarse el `MEMORY.DMP` de un cliente para
+> analizarlo, ahora cabe.
 
 ### Paso 4 — Desplegar la parte portable
 
